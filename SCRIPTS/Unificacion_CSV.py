@@ -2,7 +2,7 @@ import pandas as pd
 import glob
 import os
 import re # Importamos la librería de Expresiones Regulares (Regex)
-import numpy as np # (NUEVO) Importamos numpy para la lógica condicional
+import numpy as np # Importamos numpy para la lógica condicional
 
 # --- 1. CONFIGURACIÓN ---
 # POR FAVOR, MODIFICA ESTAS DOS LÍNEAS:
@@ -12,6 +12,7 @@ carpeta_entrada = r"\\192.168.1.2\cenyt-proyectos\CEN-223_TOP DRIVE\2.INFOENTRAD
 
 # 2. La ruta COMPLETA donde quieres guardar el Excel final (incluye el nombre.xlsx)
 ruta_excel_salida = r"\\192.168.1.2\cenyt-proyectos\CEN-223_TOP DRIVE\2.INFOENTRADA\DATOS_FINALES\resultado_consolidado.xlsx"
+
 # --- 2. FUNCIÓN AUXILIAR (Conversión Decimal con Comas) ---
 def convertir_a_decimal(valor):
     """
@@ -163,21 +164,23 @@ else:
     
     
     # --- 7. TRANSFORMACIÓN DE TEXTO (Ruta_Fotos) ---
-    columna_objetivo = "Ruta_Fotos"
+    columna_fotos = "Ruta_Fotos"
     texto_a_eliminar = "/storage/emulated/0/Download/SALI/"
 
-    if columna_objetivo not in df_final.columns:
-        print(f"\nAdvertencia: La columna '{columna_objetivo}' no existe. Saltando limpieza de rutas de fotos.")
+    if columna_fotos not in df_final.columns:
+        print(f"\nAdvertencia: La columna '{columna_fotos}' no existe. Saltando limpieza y separación de fotos.")
+        # Si no hay fotos, el df_resultado es solo una copia de df_final
+        df_resultado = df_final.copy()
     else:
-        print(f"\nLimpiando la columna '{columna_objetivo}'...")
+        print(f"\nLimpiando la columna '{columna_fotos}'...")
         
         # .astype(str) por si acaso la columna quedó como NA
-        df_final[columna_objetivo] = df_final[columna_objetivo].astype(str).str.replace(texto_a_eliminar, "")
+        df_final[columna_fotos] = df_final[columna_fotos].astype(str).str.replace(texto_a_eliminar, "")
         
         # --- 8. SEPARACIÓN EN COLUMNAS (Fotos) ---
         print("Separando rutas en columnas 'Foto1', 'Foto2', ...")
         
-        df_fotos_separadas = df_final[columna_objetivo].str.split(',', expand=True)
+        df_fotos_separadas = df_final[columna_fotos].str.split(',', expand=True)
         
         nuevos_nombres = {i: f"Foto{i+1}" for i in df_fotos_separadas.columns}
         df_fotos_separadas = df_fotos_separadas.rename(columns=nuevos_nombres)
@@ -185,99 +188,147 @@ else:
         print(f"Se crearon {len(df_fotos_separadas.columns)} columnas de fotos.")
         
         # --- 9. UNIR DATAFRAMES (Principal + Fotos) ---
-        
+        # Si hay fotos, df_resultado es la unión
         df_resultado = df_final.join(df_fotos_separadas)
         
         
-        # --- 10. CREAR Y GUARDAR REPORTE DE HALLAZGOS (ACTUALIZADO) ---
-        print("\n--- Iniciando creación de reporte 'Hallazgos' ---")
-        
-        cols_requeridas_hallazgos = [
-            'Circuito', 'Estructura_Tag', 'Apoyo_Fractura', 
-            'Templetes_Rotos', 'Templetes_Faltantes',
-            'Templetes_Flojos',
-            'Templete_Observaciones'
-        ]
-        
-        cols_faltantes = [col for col in cols_requeridas_hallazgos if col not in df_resultado.columns]
+    # --- 10. CREAR Y GUARDAR REPORTE DE HALLAZGOS (LÓGICA MOVIDA) ---
+    print("\n--- Iniciando creación de reporte 'Hallazgos' ---")
+    
+    cols_requeridas_hallazgos = [
+        'Circuito', 'Estructura_Tag', 'Apoyo_Fractura', 
+        'Templetes_Rotos', 'Templetes_Faltantes',
+        'Templetes_Flojos',
+        'Templete_Observaciones'
+    ]
+    
+    # Usamos df_resultado (que siempre existe)
+    cols_faltantes = [col for col in cols_requeridas_hallazgos if col not in df_resultado.columns]
 
-        if cols_faltantes:
-            print(f"  Advertencia: No se puede crear 'Hallazgos.xlsx'. Faltan columnas: {cols_faltantes}")
+    if cols_faltantes:
+        print(f"  Advertencia: No se puede crear 'Hallazgos.xlsx'. Faltan columnas: {cols_faltantes}")
+    else:
+        print("  Generando columnas para Hallazgos...")
+        
+        # 2. Crear 'Custom'
+        circuito_str = df_resultado['Circuito'].astype(str).str.strip().fillna('')
+        tag_str = df_resultado['Estructura_Tag'].astype(str).str.strip().fillna('')
+        df_resultado['Custom'] = circuito_str + " " + tag_str
+
+        # 3. Crear 'REEMPLAZO DE POSTES'
+        col_comparacion = df_resultado['Apoyo_Fractura'].astype(str).str.strip().str.lower()
+        condicion_fractura = (col_comparacion == 'sí')
+        df_resultado['REEMPLAZO DE POSTES'] = condicion_fractura.astype(int)
+        
+        # 4. Crear 'INSTALACION RETENIDAS NUEVAS'
+        print("  Calculando 'INSTALACION RETENIDAS NUEVAS'...")
+        col_rotos = pd.to_numeric(df_resultado['Templetes_Rotos'], errors='coerce').fillna(0)
+        col_faltantes = pd.to_numeric(df_resultado['Templetes_Faltantes'], errors='coerce').fillna(0)
+        suma_inicial = col_rotos + col_faltantes
+        condicion_vacio = (suma_inicial == 0)
+        obs_col = df_resultado['Templete_Observaciones'].astype(str).fillna('').str.lower()
+        regex_inclinacion = r'inclinad[oa]|inclinacion'
+        condicion_obs = obs_col.str.contains(regex_inclinacion, regex=True, na=False)
+        df_resultado['INSTALACION RETENIDAS NUEVAS'] = np.where(
+            (condicion_vacio & condicion_obs), 
+            1, 
+            suma_inicial
+        )
+        
+        # 5. Crear 'RETENSIONADO RETENIDAS'
+        print("  Calculando 'RETENSIONADO RETENIDAS'...")
+        col_flojos = pd.to_numeric(df_resultado['Templetes_Flojos'], errors='coerce').fillna(0)
+        df_resultado['RETENSIONADO RETENIDAS'] = col_flojos
+        
+        
+        # --- (NUEVO) 11. CREACIÓN DE COLUMNAS DE NORMALIZACIÓN (LÓGICA MOVIDA AQUÍ) ---
+        print("\n  --- Iniciando creación de columnas de Normalización (13 kv a 35 kv) ---")
+        
+        # Definir nombres de columnas
+        col_norm_ret = 'NORMALIZACION ESTRUCTURA RETENCION 13 kv a 35 kv'
+        col_norm_sus = 'NORMALIZACION ESTRUCTURA SUSPENSION 13 kv a 35 kv'
+        
+        cols_requeridas_norm = ['Aisladores_Observaciones', 'Configuracion']
+        cols_faltantes_norm = [col for col in cols_requeridas_norm if col not in df_resultado.columns]
+        
+        # Lista para rastrear las columnas que SÍ creamos
+        columnas_norm_creadas = []
+
+        if cols_faltantes_norm:
+            print(f"    Advertencia: No se pueden crear columnas de Normalización. Faltan: {cols_faltantes_norm}")
         else:
-            print("  Generando columnas para Hallazgos...")
+            print("    Calculando columnas de Normalización...")
             
-            # 2. Crear 'Custom'
-            circuito_str = df_resultado['Circuito'].astype(str).str.strip().fillna('')
-            tag_str = df_resultado['Estructura_Tag'].astype(str).str.strip().fillna('')
-            df_resultado['Custom'] = circuito_str + " " + tag_str
-
-            # 3. Crear 'REEMPLAZO DE POSTES' (LÓGICA ACTUALIZADA A 1/0)
-            col_comparacion = df_resultado['Apoyo_Fractura'].astype(str).str.strip().str.lower()
-            condicion_fractura = (col_comparacion == 'sí')
-            
-            # Convertimos True a 1 y False a 0
-            df_resultado['REEMPLAZO DE POSTES'] = condicion_fractura.astype(int)
-            
-            # 4. Crear 'INSTALACION RETENIDAS NUEVAS'
-            print("  Calculando 'INSTALACION RETENIDAS NUEVAS'...")
-            
-            # a. Cálculo original
-            col_rotos = pd.to_numeric(df_resultado['Templetes_Rotos'], errors='coerce').fillna(0)
-            col_faltantes = pd.to_numeric(df_resultado['Templetes_Faltantes'], errors='coerce').fillna(0)
-            suma_inicial = col_rotos + col_faltantes
-            
-            # b. Condición de "vacío" (True si la suma es 0)
-            condicion_vacio = (suma_inicial == 0)
-            
-            # c. Condición de "observaciones"
-            obs_col = df_resultado['Templete_Observaciones'].astype(str).fillna('').str.lower()
-            regex_inclinacion = r'inclinad[oa]|inclinacion'
-            condicion_obs = obs_col.str.contains(regex_inclinacion, regex=True, na=False)
-            
-            # d. Aplicar lógica con np.where
-            df_resultado['INSTALACION RETENIDAS NUEVAS'] = np.where(
-                (condicion_vacio & condicion_obs), 
-                1, 
-                suma_inicial
+            # Condición 1: Contiene "2 discos"
+            cond_discos = df_resultado['Aisladores_Observaciones'].astype(str).str.contains(
+                "2 discos", case=False, na=False
             )
             
-            # 5. Crear 'RETENSIONADO RETENIDAS'
-            print("  Calculando 'RETENSIONADO RETENIDAS'...")
-            
-            col_flojos = pd.to_numeric(df_resultado['Templetes_Flojos'], errors='coerce').fillna(0)
-            
-            df_resultado['RETENSIONADO RETENIDAS'] = col_flojos
-            
-            
-            # 6. Seleccionar columnas
-            columnas_finales_hallazgos = [
-                'Circuito', 'Estructura_Tag', 'Custom', 
-                'REEMPLAZO DE POSTES', 
-                'INSTALACION RETENIDAS NUEVAS',
-                'RETENSIONADO RETENIDAS'
-            ]
-            df_hallazgos = df_resultado[columnas_finales_hallazgos]
-            
-            # 7. Definir la ruta de salida
-            directorio_salida = os.path.dirname(ruta_excel_salida)
-            ruta_hallazgos_salida = os.path.join(directorio_salida, "Hallazgos.xlsx")
-            
-            # 8. Guardar el nuevo Excel
-            try:
-                print(f"  Guardando archivo de Hallazgos en: {ruta_hallazgos_salida}")
-                df_hallazgos.to_excel(ruta_hallazgos_salida, index=False)
-                print("  Archivo 'Hallazgos.xlsx' guardado exitosamente.")
-            except Exception as e_hallazgos:
-                print(f"  ¡Error al guardar el Excel 'Hallazgos'! Verifica la ruta y permisos: {e_hallazgos}")
-        
-        # --------------------------------------------------------
+            # Condición 2: El tipo de configuración
+            config_limpia = df_resultado['Configuracion'].astype(str).str.strip()
+            cond_retencion = (config_limpia == "Retención (Corte)")
+            cond_suspension = (config_limpia == "Suspensión")
 
-        # --- 11. GUARDAR ARCHIVO DE SALIDA PRINCIPAL ---
-        
-        print(f"\nGuardando archivo principal en: {ruta_excel_salida}")
-        try:
-            df_resultado.to_excel(ruta_excel_salida, index=False)
-            print("\n¡Proceso completado exitosamente!")
+            # --- Crear las nuevas columnas con 1 y 0 ---
             
-        except Exception as e:
-            print(f"¡Error al guardar el Excel principal! Verifica la ruta y permisos: {e}")
+            # Columna de Retención
+            df_resultado[col_norm_ret] = np.where(
+                cond_discos & cond_retencion,
+                1,  # (NUEVO)
+                0   # (NUEVO)
+            )
+
+            # Columna de Suspensión
+            df_resultado[col_norm_sus] = np.where(
+                cond_discos & cond_suspension,
+                1,  # (NUEVO)
+                0   # (NUEVO)
+            )
+            
+            # Añadir a la lista de "creadas" para el reporte
+            columnas_norm_creadas = [col_norm_ret, col_norm_sus]
+            print("    Columnas de Normalización creadas exitosamente.")
+        
+        # --- Fin de la sección de Normalización ---
+        
+        
+        # 6. Seleccionar columnas para Hallazgos (ACTUALIZADO)
+        print("\n  Seleccionando columnas finales para Hallazgos...")
+        
+        columnas_finales_hallazgos = [
+            'Circuito', 'Estructura_Tag', 'Custom', 
+            'REEMPLAZO DE POSTES', 
+            'INSTALACION RETENIDAS NUEVAS',
+            'RETENSIONADO RETENIDAS'
+        ]
+        
+        # (NUEVO) Añadir las columnas de normalización (si se crearon)
+        columnas_finales_hallazgos.extend(columnas_norm_creadas)
+        
+        df_hallazgos = df_resultado[columnas_finales_hallazgos]
+        
+        # 7. Definir la ruta de salida
+        directorio_salida = os.path.dirname(ruta_excel_salida)
+        ruta_hallazgos_salida = os.path.join(directorio_salida, "Hallazgos.xlsx")
+        
+        # 8. Guardar el nuevo Excel
+        try:
+            print(f"  Guardando archivo de Hallazgos en: {ruta_hallazgos_salida}")
+            df_hallazgos.to_excel(ruta_hallazgos_salida, index=False)
+            print("  Archivo 'Hallazgos.xlsx' guardado exitosamente.")
+        except Exception as e_hallazgos:
+            print(f"  ¡Error al guardar el Excel 'Hallazgos'! Verifica la ruta y permisos: {e_hallazgos}")
+    
+    # --------------------------------------------------------
+
+    # --- 12. GUARDAR ARCHIVO DE SALIDA PRINCIPAL ---
+    # (Ya no hay sección 11, esta es la 12)
+    # Nota: df_resultado ya tiene las columnas de normalización
+    
+    print(f"\nGuardando archivo principal en: {ruta_excel_salida}")
+    try:
+        df_resultado.to_excel(ruta_excel_salida, index=False)
+        print("\n¡Proceso completado exitosamente!")
+        
+    except Exception as e:
+        print(f"¡Error al guardar el Excel principal! Verifica la ruta y permisos: {e}")
