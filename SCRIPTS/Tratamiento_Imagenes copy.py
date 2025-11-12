@@ -4,7 +4,7 @@ from PIL import Image
 
 # --- NO HAY CAMBIOS AQUÍ ---
 # Carpetas
-carpeta = r"\\192.168.1.2\cenyt-proyectos\CEN-223_TD GUAFITA\2.INFOENTRADA\DATOS_CRUDOS\Fotos"
+carpeta = r"\\192.168.1.2\cenyt-proyectos\CEN-223_TD GUAFITA\2.INFOENTRADA\DATOS_CRUDOS\Omar\25 de Octubre"
 carpeta_salida = r"\\192.168.1.2\cenyt-proyectos\CEN-223_TOP DRIVE\2.INFOENTRADA\DATOS_FINALES/FOTOS_TRATADAS"
 os.makedirs(carpeta_salida, exist_ok=True)
 # Límite en KB
