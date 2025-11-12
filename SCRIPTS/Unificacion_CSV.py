@@ -8,10 +8,10 @@ import numpy as np # Importamos numpy para la lógica condicional
 # POR FAVOR, MODIFICA ESTAS DOS LÍNEAS:
 
 # 1. La carpeta donde están TODOS tus archivos (CSV y Excel)
-carpeta_entrada = r"\\192.168.1.2\cenyt-proyectos\CEN-223_TOP DRIVE\2.INFOENTRADA\DATOS_CRUDOS\Tablas"
+carpeta_entrada = r"\\192.168.1.2\cenyt-proyectos\CEN-223_TD GUAFITA\2.INFOENTRADA\DATOS_CRUDOS\Tablas"
 
 # 2. La ruta COMPLETA donde quieres guardar el Excel final (incluye el nombre.xlsx)
-ruta_excel_salida = r"\\192.168.1.2\cenyt-proyectos\CEN-223_TOP DRIVE\2.INFOENTRADA\DATOS_FINALES\resultado_consolidado.xlsx"
+ruta_excel_salida = r"\\192.168.1.2\cenyt-proyectos\CEN-223_TD GUAFITA\2.INFOENTRADA\DATOS_FINALES\resultado_consolidado.xlsx"
 
 # --- 2. FUNCIÓN AUXILIAR (Conversión Decimal con Comas) ---
 def convertir_a_decimal(valor):
@@ -110,11 +110,11 @@ else:
                 # Si falla UTF-8, intentamos con 'latin-1' (común en Windows)
                 df_temp = pd.read_csv(archivo, sep=';', dtype=str, encoding='latin-1')
                 lista_dataframes.append(df_temp)
-                print(f"  Advertencia: CSV '{os.path.basename(archivo)}' leído como 'latin-1'.")
+                print(f"   Advertencia: CSV '{os.path.basename(archivo)}' leído como 'latin-1'.")
             except Exception as e:
-                print(f"  Advertencia: No se pudo leer el CSV '{os.path.basename(archivo)}'. Error: {e}")
+                print(f"   Advertencia: No se pudo leer el CSV '{os.path.basename(archivo)}'. Error: {e}")
         except Exception as e:
-             print(f"  Advertencia: No se pudo leer el CSV '{os.path.basename(archivo)}'. Error: {e}")
+             print(f"   Advertencia: No se pudo leer el CSV '{os.path.basename(archivo)}'. Error: {e}")
 
     # --- Procesar Excels ---
     print("Leyendo archivos Excel...")
@@ -123,7 +123,7 @@ else:
             df_temp = pd.read_excel(archivo, dtype=str)
             lista_dataframes.append(df_temp)
         except Exception as e:
-            print(f"  Advertencia: No se pudo leer el Excel '{os.path.basename(archivo)}'. Error: {e}")
+            print(f"   Advertencia: No se pudo leer el Excel '{os.path.basename(archivo)}'. Error: {e}")
 
     # --- 5. CONCATENACIÓN Y LIMPIEZA INICIAL ---
     print("Concatenando todos los archivos...")
@@ -136,6 +136,27 @@ else:
     # Reemplazamos 'nan' (como string, que viene de la corrección) por vacío
     df_final = df_final.replace('nan', pd.NA)
 
+    # --- 5.1. (NUEVO) REEMPLAZO DE VALORES EN 'Circuito' ---
+    print("\nIniciando reemplazos en la columna 'Circuito'...")
+    if 'Circuito' in df_final.columns:
+        # Primero, limpiamos espacios en blanco para asegurar coincidencias exactas
+        df_final['Circuito'] = df_final['Circuito'].astype(str).str.strip()
+
+        # Definimos los reemplazos que solicitaste
+        reemplazos_circuito = {
+            'Q2- Derivación': 'Q2',           # Interpretando "Q2- Derivación esto Q2"
+            'Q6 derivación con Q2': 'Q2',     # Literal de la solicitud
+            'Q6 derivación CTO 2 almacen': 'Q6' # Literal de la solicitud
+        }
+        
+        # Aplicar los reemplazos (coincidencia exacta del valor de la celda)
+        df_final['Circuito'] = df_final['Circuito'].replace(reemplazos_circuito)
+        
+        print("Reemplazos en 'Circuito' completados.")
+    else:
+        print("Advertencia: No se encontró la columna 'Circuito'. Saltando reemplazos.")
+    # --------------------------------------------------
+
 
     # --- 6. CORRECCIÓN DE COORDENADAS Y RELLENO ---
     print("\nIniciando limpieza y conversión de coordenadas...")
@@ -146,15 +167,15 @@ else:
         df_final['Longitud_Manual'] = pd.NA
 
     if 'Latitud_GPS' in df_final.columns and 'Longitud_GPS' in df_final.columns:
-        print("  Convirtiendo columnas GPS a formato numérico...")
+        print("   Convirtiendo columnas GPS a formato numérico...")
         df_final['Latitud_GPS'] = df_final['Latitud_GPS'].apply(convertir_a_decimal)
         df_final['Longitud_GPS'] = df_final['Longitud_GPS'].apply(convertir_a_decimal)
         
-        print("  Convirtiendo columnas Manuales a formato numérico...")
+        print("   Convirtiendo columnas Manuales a formato numérico...")
         df_final['Latitud_Manual'] = df_final['Latitud_Manual'].apply(convertir_a_decimal)
         df_final['Longitud_Manual'] = df_final['Longitud_Manual'].apply(convertir_a_decimal)
 
-        print("  Rellenando vacíos de columnas Manuales con datos de GPS...")
+        print("   Rellenando vacíos de columnas Manuales con datos de GPS...")
         df_final['Latitud_Manual'] = df_final['Latitud_Manual'].fillna(df_final['Latitud_GPS'])
         df_final['Longitud_Manual'] = df_final['Longitud_Manual'].fillna(df_final['Longitud_GPS'])
         
@@ -206,11 +227,12 @@ else:
     cols_faltantes = [col for col in cols_requeridas_hallazgos if col not in df_resultado.columns]
 
     if cols_faltantes:
-        print(f"  Advertencia: No se puede crear 'Hallazgos.xlsx'. Faltan columnas: {cols_faltantes}")
+        print(f"   Advertencia: No se puede crear 'Hallazgos.xlsx'. Faltan columnas: {cols_faltantes}")
     else:
-        print("  Generando columnas para Hallazgos...")
+        print("   Generando columnas para Hallazgos...")
         
         # 2. Crear 'Custom'
+        # NOTA: 'Circuito' ya está limpio gracias al paso 5.1
         circuito_str = df_resultado['Circuito'].astype(str).str.strip().fillna('')
         tag_str = df_resultado['Estructura_Tag'].astype(str).str.strip().fillna('')
         df_resultado['Custom'] = circuito_str + " " + tag_str
@@ -221,7 +243,7 @@ else:
         df_resultado['REEMPLAZO DE POSTES'] = condicion_fractura.astype(int)
         
         # 4. Crear 'INSTALACION RETENIDAS NUEVAS'
-        print("  Calculando 'INSTALACION RETENIDAS NUEVAS'...")
+        print("   Calculando 'INSTALACION RETENIDAS NUEVAS'...")
         col_rotos = pd.to_numeric(df_resultado['Templetes_Rotos'], errors='coerce').fillna(0)
         col_faltantes = pd.to_numeric(df_resultado['Templetes_Faltantes'], errors='coerce').fillna(0)
         suma_inicial = col_rotos + col_faltantes
@@ -236,13 +258,13 @@ else:
         )
         
         # 5. Crear 'RETENSIONADO RETENIDAS'
-        print("  Calculando 'RETENSIONADO RETENIDAS'...")
+        print("   Calculando 'RETENSIONADO RETENIDAS'...")
         col_flojos = pd.to_numeric(df_resultado['Templetes_Flojos'], errors='coerce').fillna(0)
         df_resultado['RETENSIONADO RETENIDAS'] = col_flojos
         
         
         # --- (NUEVO) 11. CREACIÓN DE COLUMNAS DE NORMALIZACIÓN (LÓGICA MOVIDA AQUÍ) ---
-        print("\n  --- Iniciando creación de columnas de Normalización (13 kv a 35 kv) ---")
+        print("\n   --- Iniciando creación de columnas de Normalización (13 kv a 35 kv) ---")
         
         # Definir nombres de columnas
         col_norm_ret = 'NORMALIZACION ESTRUCTURA RETENCION 13 kv a 35 kv'
@@ -255,9 +277,9 @@ else:
         columnas_norm_creadas = []
 
         if cols_faltantes_norm:
-            print(f"    Advertencia: No se pueden crear columnas de Normalización. Faltan: {cols_faltantes_norm}")
+            print(f"     Advertencia: No se pueden crear columnas de Normalización. Faltan: {cols_faltantes_norm}")
         else:
-            print("    Calculando columnas de Normalización...")
+            print("     Calculando columnas de Normalización...")
             
             # Condición 1: Contiene "2 discos"
             cond_discos = df_resultado['Aisladores_Observaciones'].astype(str).str.contains(
@@ -287,13 +309,13 @@ else:
             
             # Añadir a la lista de "creadas" para el reporte
             columnas_norm_creadas = [col_norm_ret, col_norm_sus]
-            print("    Columnas de Normalización creadas exitosamente.")
+            print("     Columnas de Normalización creadas exitosamente.")
         
         # --- Fin de la sección de Normalización ---
         
         
         # 6. Seleccionar columnas para Hallazgos (ACTUALIZADO)
-        print("\n  Seleccionando columnas finales para Hallazgos...")
+        print("\n   Seleccionando columnas finales para Hallazgos...")
         
         columnas_finales_hallazgos = [
             'Circuito', 'Estructura_Tag', 'Custom', 
@@ -313,11 +335,11 @@ else:
         
         # 8. Guardar el nuevo Excel
         try:
-            print(f"  Guardando archivo de Hallazgos en: {ruta_hallazgos_salida}")
+            print(f"   Guardando archivo de Hallazgos en: {ruta_hallazgos_salida}")
             df_hallazgos.to_excel(ruta_hallazgos_salida, index=False)
-            print("  Archivo 'Hallazgos.xlsx' guardado exitosamente.")
+            print("   Archivo 'Hallazgos.xlsx' guardado exitosamente.")
         except Exception as e_hallazgos:
-            print(f"  ¡Error al guardar el Excel 'Hallazgos'! Verifica la ruta y permisos: {e_hallazgos}")
+            print(f"   ¡Error al guardar el Excel 'Hallazgos'! Verifica la ruta y permisos: {e_hallazgos}")
     
     # --------------------------------------------------------
 

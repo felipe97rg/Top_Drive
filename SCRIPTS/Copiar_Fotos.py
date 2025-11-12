@@ -7,14 +7,14 @@ import re
 # POR FAVOR, MODIFICA ESTAS TRES LÍNEAS:
 
 # 1. El archivo consolidado que creamos en el script anterior
-ruta_excel_consolidado = r"\\192.168.1.2\cenyt-proyectos\CEN-223_TOP DRIVE\2.INFOENTRADA\DATOS_FINALES\resultado_consolidado.xlsx"
+ruta_excel_consolidado = r"\\192.168.1.2\cenyt-proyectos\CEN-223_TD GUAFITA\2.INFOENTRADA\DATOS_FINALES\resultado_consolidado.xlsx"
 
 # 2. La carpeta donde están TODAS las fotos originales (el "pool" de fotos)
 #    (Ej: \\192.168.1.2\cenyt-proyectos\CEN-223_TOP DRIVE\FOTOS_CRUDAS)
-ruta_fotos_origen = r"\\192.168.1.2\cenyt-proyectos\CEN-223_TOP DRIVE\2.INFOENTRADA\DATOS_FINALES\FOTOS_TRATADAS"
+ruta_fotos_origen = r"\\192.168.1.2\cenyt-proyectos\CEN-223_TD GUAFITA\2.INFOENTRADA\DATOS_FINALES\FOTOS_TRATADAS"
 
 # 3. La carpeta base donde quieres crear la nueva estructura (ej: ...\FOTOS_ORDENADAS)
-carpeta_destino_base = r"\\192.168.1.2\cenyt-proyectos\CEN-223_TOP DRIVE\\2.INFOENTRADA\FOTOS_ORDENADAS"
+carpeta_destino_base = r"\\192.168.1.2\cenyt-proyectos\CEN-223_TD GUAFITA\2.INFOENTRADA\FOTOS_ORDENADAS"
 
 # --- 2. FUNCIÓN AUXILIAR (Para limpiar nombres de carpetas) ---
 def limpiar_nombre_carpeta(nombre):
