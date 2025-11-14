@@ -1,2 +1,7 @@
 # Ignorar carpetas de datos crudos
 DATOS_CRUDOS/
+DATOS_FINALES/*.xlsx
+
+# Archivos de Cache de Windows
+**/Thumbs.db
+.DS_Store

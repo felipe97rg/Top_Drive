@@ -11,21 +11,22 @@ from openpyxl.styles import Alignment
 from PIL import Image as PILImage 
 
 # --- 1. CONFIGURACIÓN ---
-RUTA_EXCEL_ENTRADA = r"\\192.168.1.2\cenyt-proyectos\CEN-223_TOP DRIVE\2.INFOENTRADA\DATOS_FINALES\resultado_consolidado.xlsx"
-CARPETA_FOTOS = r"\\192.168.1.2\cenyt-proyectos\CEN-223_TOP DRIVE\2.INFOENTRADA\DATOS_FINALES\FOTOS_TRATADAS"
-RUTA_EXCEL_SALIDA = r"\\192.168.1.2\cenyt-proyectos\CEN-223_TOP DRIVE\2.INFOENTRADA\DATOS_FINALES\Reporte_Fotografico.xlsx"
+RUTA_EXCEL_ENTRADA = r"\\192.168.1.2\cenyt-proyectos\CEN-223_TD GUAFITA\2.INFOENTRADA\DATOS_FINALES\SIU_consolidado.xlsx"
+CARPETA_FOTOS = r"\\192.168.1.2\cenyt-proyectos\CEN-223_TD GUAFITA\2.INFOENTRADA\DATOS_FINALES\FOTOS_TRATADAS"
+RUTA_EXCEL_SALIDA = r"\\192.168.1.2\cenyt-proyectos\CEN-223_TD GUAFITA\2.INFOENTRADA\DATOS_FINALES\Reporte_Fotografico_1.xlsx"
 
 # --- 2. CONSTANTES DE FORMATO ---
 MAX_FILAS_POR_HOJA = 30
 CELL_HEIGHT_PTS = 80 
-CELL_WIDTH_PTS = 20  
+CELL_WIDTH_PTS = 20 
 IMG_MAX_WIDTH_PX = 145 
 IMG_MAX_HEIGHT_PX = 105
 
 # Columnas de observaciones generales
 COLUMNAS_OBSERVACIONES = [
-    'Circuito_Observaciones', 'Observaciones', 'Terreno_Observaciones', 
-    'Apoyo_Observacion', 'Configuracion_Observaciones', 'Disposicion_Observaciones',
+    "Configuracion",'Configuracion_Observaciones',
+    "Disposicion", "Disposicion_Observaciones",'Circuito_Observaciones', 'Observaciones', 'Terreno_Observaciones', 
+    'Apoyo_Observacion', 'Disposicion_Observaciones',
     'Observacion_Cruceta', 'Aisladores_Observaciones', 'DPS_Observaciones',
     'Observaciones_Equipos', 'Afloramiento_Observaciones', 'SPT_Observaciones',
     'Otras_Observaciones'
@@ -36,7 +37,6 @@ COLUMNAS_CONDICION = [
     'Apoyo_Fractura', 'Apoyo_Oxido', 'Apoyo_Humedad', 'Apoyo_Vandalizado'
 ]
 
-# --- ¡LISTA ACTUALIZADA! ---
 # Columnas de condición de la Cruceta (Sí/No)
 COLUMNAS_CRUCETA = [
     'Cruceta_BuenEstado',
@@ -49,22 +49,47 @@ COLUMNAS_CRUCETA = [
 # Columnas finales a mostrar
 COLUMNAS_FINALES = [
     'Circuito', 'Estructura_Tag', 'Latitud_Manual', 'Longitud_Manual',
-    'Observaciones Generales', 'Foto1', 'Foto2'
+    'Observaciones Generales', 'Foto_1', 'Foto_2'
 ]
 
-# --- 3. FUNCIÓN AUXILIAR PARA CONCATENAR (Sin cambios en la lógica) ---
+# --- 3. NUEVA FUNCIÓN DE CORRECCIÓN DE TILDES ---
+
+def corregir_tildes(texto):
+    """
+    Intenta corregir el problema de 'mojibake' (e.g., "MetÃ¡licos" -> "Metálicos").
+    Este es un problema común cuando texto UTF-8 se interpreta erróneamente como latin-1.
+    """
+    # Si es nulo (NaN, NaT, None), lo devolvemos tal cual
+    if pd.isna(texto):
+        return texto
+    
+    # Convertimos a string por si acaso (ej. si es un número)
+    texto_str = str(texto)
+    
+    try:
+        # El truco: codificar en latin-1 (que trata cada byte como un caracter)
+        # y luego decodificar como UTF-8 (que interpreta la secuencia de bytes)
+        return texto_str.encode('latin-1').decode('utf-8')
+    except (UnicodeEncodeError, UnicodeDecodeError):
+        # Si falla (p.ej., ya estaba bien, es un número, o es otro tipo de error),
+        # devolvemos el texto original (convertido a string).
+        return texto_str
+
+# --- 4. FUNCIÓN AUXILIAR PARA CONCATENAR (MODIFICADA) ---
 
 def crear_texto_observaciones(row):
     """
     Crea el texto en formato "diccionario" para las observaciones.
     Añade Tipo, Condición Apoyo (sin 'Apoyo_') y Condición Cruceta (sin 'Cruceta_').
+    ¡AHORA CORRIGE TILDES!
     """
     partes = [] 
     
     # --- 1. Lógica (Tipo y Subtipo) ---
     tipo_partes = []
-    val_tipo = row.get('Apoyo_Tipo')
-    val_subtipo = row.get('Apoyo_Subtipo')
+    # APLICAMOS CORRECCIÓN
+    val_tipo = corregir_tildes(row.get('Apoyo_Tipo'))
+    val_subtipo = corregir_tildes(row.get('Apoyo_Subtipo'))
     
     if pd.notna(val_tipo) and str(val_tipo).strip() != "":
         tipo_partes.append(str(val_tipo).strip())
@@ -88,7 +113,6 @@ def crear_texto_observaciones(row):
 
     # --- 3. Lógica (Condiciones "Sí" - Cruceta) ---
     cruceta_partes = []
-    # Usará la lista COLUMNAS_CRUCETA actualizada
     for col in COLUMNAS_CRUCETA: 
         if col in row.index:
             valor = row[col]
@@ -102,14 +126,16 @@ def crear_texto_observaciones(row):
     # --- 4. Lógica (Observaciones generales tipo diccionario) ---
     for col in COLUMNAS_OBSERVACIONES:
         if col in row.index:
-            valor = row[col]
+            # APLICAMOS CORRECCIÓN
+            valor = corregir_tildes(row[col])
+            
             if pd.notna(valor) and str(valor).strip() != "":
                 partes.append(f"{col}: {valor}")
 
     # --- 5. Final ---
     return ", ".join(partes)
 
-# --- 4. FUNCIÓN AUXILIAR PARA INSERTAR IMÁGENES (Sin Cambios) ---
+# --- 5. FUNCIÓN AUXILIAR PARA INSERTAR IMÁGENES (Sin Cambios) ---
 
 def insertar_imagen_en_celda(ws, cell, nombre_foto, carpeta_base):
     if pd.isna(nombre_foto):
@@ -138,7 +164,7 @@ def insertar_imagen_en_celda(ws, cell, nombre_foto, carpeta_base):
         cell.value = "Error al cargar"
 
 
-# --- 5. SCRIPT PRINCIPAL (Sin Cambios) ---
+# --- 6. SCRIPT PRINCIPAL (Sin cambios en la lógica) ---
 
 print("Iniciando proceso de reporte fotográfico...")
 writer = None 
@@ -148,12 +174,20 @@ try:
     df_base = pd.read_excel(RUTA_EXCEL_ENTRADA)
 
     print("Concatenando observaciones...")
+    # Esta línea ahora usará la función MODIFICADA
     df_base['Observaciones Generales'] = df_base.apply(crear_texto_observaciones, axis=1)
 
-    if 'Foto1' not in df_base.columns: df_base['Foto1'] = pd.NA
-    if 'Foto2' not in df_base.columns: df_base['Foto2'] = pd.NA
+    if 'Foto_1' not in df_base.columns: df_base['Foto_1'] = pd.NA
+    if 'Foto_2' not in df_base.columns: df_base['Foto_2'] = pd.NA
         
     df_final = df_base[COLUMNAS_FINALES]
+
+    # --- ¡CORRECCIÓN AÑADIDA AQUÍ! ---
+    TEXTO_URL_A_QUITAR = "https://github.com/felipe97rg/Top_Drive/tree/main/DATOS_FINALES/FOTOS_TRATADAS/"
+    print(f"Limpiando prefijo de URL en columnas de fotos...")
+    df_final['Foto_1'] = df_final['Foto_1'].str.replace(TEXTO_URL_A_QUITAR, '', regex=False)
+    df_final['Foto_2'] = df_final['Foto_2'].str.replace(TEXTO_URL_A_QUITAR, '', regex=False)
+    # --- FIN DE LA CORRECCIÓN ---
 
     writer = pd.ExcelWriter(RUTA_EXCEL_SALIDA, engine='openpyxl')
     
@@ -181,6 +215,8 @@ try:
             fin = (i + 1) * MAX_FILAS_POR_HOJA
             df_pagina = df_circuito.iloc[inicio:fin]
             
+            df_pagina = df_pagina.copy()
+            
             df_pagina.to_excel(writer, sheet_name=nombre_hoja, index=False)
             
             ws = writer.sheets[nombre_hoja]
@@ -197,8 +233,8 @@ try:
                 
                 ws.row_dimensions[row_num_excel].height = CELL_HEIGHT_PTS
                 
-                nombre_foto1 = df_pagina.iloc[idx]['Foto1']
-                nombre_foto2 = df_pagina.iloc[idx]['Foto2']
+                nombre_foto1 = df_pagina.iloc[idx]['Foto_1']
+                nombre_foto2 = df_pagina.iloc[idx]['Foto_2']
                 
                 cell_foto1 = ws[f'F{row_num_excel}']
                 cell_foto2 = ws[f'G{row_num_excel}']

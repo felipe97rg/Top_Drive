@@ -2,26 +2,15 @@ import os
 import shutil
 from PIL import Image
 
-# --- NO HAY CAMBIOS AQUÍ ---
-# Carpetas
-carpeta = r"\\192.168.1.2\cenyt-proyectos\CEN-223_TD GUAFITA\2.INFOENTRADA\DATOS_CRUDOS\Omar\25 de Octubre"
-carpeta_salida = r"\\192.168.1.2\cenyt-proyectos\CEN-223_TOP DRIVE\2.INFOENTRADA\DATOS_FINALES/FOTOS_TRATADAS"
+# --- Rutas (Las que actualizaste) ---
+carpeta = r"\\192.168.1.2\cenyt-proyectos\CEN-223_TD GUAFITA\2.INFOENTRADA\DATOS_CRUDOS"
+carpeta_salida = r"\\192.168.1.2\cenyt-proyectos\CEN-223_TD GUAFITA\2.INFOENTRADA\DATOS_FINALES/FOTOS_TRATADAS"
 os.makedirs(carpeta_salida, exist_ok=True)
 # Límite en KB
 limite_kb = 500
 
-# Archivos pendientes
-archivos_entrada = {f for f in os.listdir(carpeta) if f.lower().endswith(('.jpg', '.jpeg', '.png'))}
-archivos_salida = {f for f in os.listdir(carpeta_salida) if f.lower().endswith(('.jpg', '.jpeg', '.png'))}
-pendientes = archivos_entrada - archivos_salida
-
-print(f"Total imágenes en carpeta: {len(archivos_entrada)}")
-print(f"Ya procesadas: {len(archivos_salida)}")
-print(f"Pendientes: {len(pendientes)}")
-
-
-# --- FUNCIÓN MODIFICADA ---
-# Se renombra a 'procesar_imagen' y ahora maneja la rotación y la compresión.
+# --- FUNCIÓN "procesar_imagen" (SIN CAMBIOS) ---
+# Esta función está perfecta, la dejamos como está.
 def procesar_imagen(ruta, destino, limite_kb, calidad_inicial=85, paso=5, factor_resize=0.9):
     """
     Procesa una imagen:
@@ -34,80 +23,130 @@ def procesar_imagen(ruta, destino, limite_kb, calidad_inicial=85, paso=5, factor
         img = Image.open(ruta)
         tamano_original_kb = os.path.getsize(ruta) / 1024
         
-        # --- ¡NUEVO PASO! ---
         # 1. Verificar dimensiones y rotar si es necesario
         ancho, alto = img.size
         fue_rotada = False
         if ancho > alto:
-            # Rotar 90 grados a la derecha
-            # PIL.Image.ROTATE_270 es 90 grados en sentido horario
             img = img.transpose(Image.ROTATE_270)
             fue_rotada = True
-            # Actualizamos las dimensiones después de rotar
             ancho, alto = img.size 
 
-        # 2. Manejar PNG -> JPG (lógica que ya tenías)
+        # 2. Manejar PNG -> JPG
         if ruta.lower().endswith(".png"):
             img = img.convert("RGB")
-            # Actualizar el destino para que sea .jpg
+            # El 'destino' ya viene con .jpg, pero nos aseguramos
             destino = os.path.splitext(destino)[0] + ".jpg"
 
         # 3. Decidir si comprimir o solo guardar
         
-        # Caso A: Estaba por debajo del límite Y NO necesitaba cambios (ni rotar, ni PNG)
+        # Caso A: No necesitaba cambios (y el destino es el mismo)
         if tamano_original_kb <= limite_kb and not fue_rotada and not ruta.lower().endswith(".png"):
             shutil.copy2(ruta, destino)
-            print(f"  → Copiada sin cambios ({tamano_original_kb:.2f} KB)")
+            print(f"   → Copiada sin cambios ({tamano_original_kb:.2f} KB)")
             return
 
-        # Caso B: Estaba por debajo del límite PERO fue rotada o era PNG
+        # Caso B: Fue rotada/convertida o estaba por debajo del límite
         if tamano_original_kb <= limite_kb:
-            img.save(destino, quality=95, optimize=True) # Guardar con alta calidad
+            img.save(destino, quality=95, optimize=True)
             nuevo_tamano = os.path.getsize(destino) / 1024
-            print(f"  → Guardada (Rotada/Convertida): {nuevo_tamano:.2f} KB")
+            print(f"   → Guardada (Rotada/Convertida): {nuevo_tamano:.2f} KB")
             return
 
-        # --- Lógica de compresión (casi igual a tu función original) ---
         # Caso C: Superaba el límite (necesita compresión)
         calidad = calidad_inicial
-
         while True:
-            # Guardar temporalmente
             img.save(destino, optimize=True, quality=calidad)
             tamano_kb = os.path.getsize(destino) / 1024
 
             if tamano_kb <= limite_kb:
-                print(f"  → Comprimida: {tamano_kb:.2f} KB")
-                return # ¡Logrado!
+                print(f"   → Comprimida: {tamano_kb:.2f} KB")
+                return 
 
-            # Bajar calidad primero
             if calidad > 20:
                 calidad -= paso
             else:
-                # Si la calidad ya está muy baja, reducimos dimensiones
                 ancho = int(ancho * factor_resize)
                 alto = int(alto * factor_resize)
                 img = img.resize((ancho, alto), Image.LANCZOS)
-                # Al reducir tamaño, reseteamos la calidad para intentarlo de nuevo
                 calidad = calidad_inicial 
 
-            # Si llega a ser muy pequeña y no logra el peso, salimos
             if ancho < 200 or alto < 200:
-                print(f"  → Comprimida (mín. tamaño): {tamano_kb:.2f} KB")
-                return # Salir aunque no cumpla el límite
+                print(f"   → Comprimida (mín. tamaño): {tamano_kb:.2f} KB")
+                return
 
     except Exception as e:
-        print(f"  Error al procesar {ruta}: {e}")
+        print(f"   Error al procesar {ruta}: {e}")
 
-# --- BUCLE PRINCIPAL MODIFICADO ---
-# Ahora solo llama a la nueva función 'procesar_imagen'
-for archivo in pendientes:
-    ruta = os.path.join(carpeta, archivo)
-    destino = os.path.join(carpeta_salida, archivo)
+# --- FASE 1: Escaneo y Conteo ---
+print("Iniciando escaneo recursivo para conteo...")
 
-    if os.path.isfile(ruta):
-        tamano_kb = os.path.getsize(ruta) / 1024
-        print(f"{archivo} -> {tamano_kb:.2f} KB")
+# 1. Obtener archivos de destino (lo que ya existe)
+# Usamos 'set' para que la búsqueda sea instantánea
+try:
+    archivos_destino_existentes = set(os.listdir(carpeta_salida))
+    print(f"Encontrados {len(archivos_destino_existentes)} archivos en el destino.")
+except Exception as e:
+    print(f"Error leyendo carpeta de salida: {e}")
+    archivos_destino_existentes = set()
+
+# 2. Recorrer el origen y comparar
+pendientes = [] # Almacena tuplas (ruta_origen, nombre_destino)
+total_encontradas = 0
+total_procesadas_previamente = 0
+
+for root, dirs, files in os.walk(carpeta):
+    for file in files:
+        # Solo procesar archivos de imagen
+        if not file.lower().endswith(('.jpg', '.jpeg', '.png')):
+            continue
         
-        # Llamada única a la nueva función que maneja toda la lógica
-        procesar_imagen(ruta, destino, limite_kb)
+        total_encontradas += 1
+        ruta_origen = os.path.join(root, file)
+        
+        # Calcular el nombre de destino final (manejando .png -> .jpg)
+        basename, ext = os.path.splitext(file)
+        if ext.lower() == '.png':
+            destino_name = basename + ".jpg"
+        else:
+            destino_name = file
+        
+        # Decidir si está pendiente
+        if destino_name in archivos_destino_existentes:
+            total_procesadas_previamente += 1
+        else:
+            pendientes.append((ruta_origen, destino_name))
+
+total_pendientes = len(pendientes)
+
+# --- FASE 2: Resumen Inicial ---
+print("\n--- Resumen del Escaneo ---")
+print(f"Imágenes totales encontradas: {total_encontradas}")
+print(f"Imágenes ya procesadas (saltadas): {total_procesadas_previamente}")
+print(f"Imágenes pendientes por procesar: {total_pendientes}")
+print("--------------------------------\n")
+
+# --- FASE 3: Bucle de Procesamiento con Porcentaje ---
+if total_pendientes == 0:
+    print("¡No hay imágenes pendientes! Todo está al día.")
+else:
+    print(f"Iniciando procesamiento de {total_pendientes} imágenes...")
+    
+    for i, (ruta_origen, destino_name) in enumerate(pendientes):
+        # Calcular porcentaje
+        porcentaje = ((i + 1) / total_pendientes) * 100
+        
+        # Construir la ruta de destino completa
+        ruta_destino = os.path.join(carpeta_salida, destino_name)
+        
+        try:
+            tamano_kb = os.path.getsize(ruta_origen) / 1024
+            # Imprimir con el nuevo formato de porcentaje
+            print(f"[{i+1}/{total_pendientes} | {porcentaje:.1f}%] {os.path.relpath(ruta_origen, carpeta)} ({tamano_kb:.2f} KB)")
+            
+            # Llamada a la función
+            procesar_imagen(ruta_origen, ruta_destino, limite_kb)
+            
+        except Exception as e:
+            print(f"   Error al procesar {ruta_origen}: {e}")
+
+print("\n--- Proceso Completado ---")
