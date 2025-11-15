@@ -3,7 +3,7 @@ import shutil
 from PIL import Image
 
 # --- Rutas (Las que actualizaste) ---
-carpeta = r"\\192.168.1.2\cenyt-proyectos\CEN-223_TD GUAFITA\2.INFOENTRADA\DATOS_CRUDOS"
+carpeta = r"\\192.168.1.2\cenyt-proyectos\CEN-223_TD GUAFITA\2.INFOENTRADA\DATOS_FINALES/FOTOS_TRATADAS"
 carpeta_salida = r"\\192.168.1.2\cenyt-proyectos\CEN-223_TD GUAFITA\2.INFOENTRADA\DATOS_FINALES/FOTOS_TRATADAS"
 os.makedirs(carpeta_salida, exist_ok=True)
 # Límite en KB
